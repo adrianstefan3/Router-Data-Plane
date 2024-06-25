@@ -1,0 +1,27 @@
+=====Router Dataplan=====
+In cadrul programului am realizat un sistem de forwarding de pachete. In main am creat si alocat doua tabele, o tabela de rutare (statica) si o tabela ARP (populata dinamic), dupa aceea am inceput sa iau pachete intr-un loop "while". Pentru fiecare pachet am verificat daca protocolul din cadrul Header-ului de Ethernet este ARP sau IP si am tratat pachetul pentru fiecare in parte.
+
+=====IPv4===== 
+     Pentru IPv4 am urmat toti pasii din cerinta. Am verificat:
+-checksum-ul header-ului sa fie corect, caz in car treceam mai departe, altfel dau drop la pachet;
+-IP_destinatie sa corespunda cu IP-ul interfetei pe care a venit, caz in care stiu ca pachetul era destinat catre router asa ca am trimis un ICMP REPLY;
+-TTL <= 1, caz in care trimit un ICMP TTL EXCEEDED si dau drop la pachet, altfel decrementez TTL-ul;
+-caut intrare in tabela de rutare pentru adresa destinatie;
+-in cazul in care nu am gasit o intrare trimit un ICMP HOST UNREACHABLE si dau drop la pachet, altfel refac checksum-ul header-ului de IP si caut mai departe o intrare in tabela ARP pentru IP-ul next hop-ului;
+-in cazul in care nu exista o intrare, adauga pachetul in coada si trimit un ARP REQUEST;
+-daca gasesc o intrare in tabela ARP rescriu adresele MAC din Header-ul Ethernet si trimit pachetul pe interfata gasita in tabela de rutare.
+
+=====ARP=====
+     Pentru ARP am verificat toate cazurile:
+-daca pachetul contine un ARP REQUEST trimit un ARP REPLY de unde a venit cu adresele MAC si IP ale interfetei de pe care a venit;
+-daca pachetul contine un ARP REPLY adaug o noua intrare in tabela ARP cu adresa MAC sursa si adresa IP sursa si "iterez" prin coada si caut pentru fiecare pachet o intrare in tabela de rutare si ARP, in cazul in care gasesc in ambele trimit pachetul, altfel il adaug inapoi in coada.
+
+=====ICMP=====
+     Pentru mesajele ICMP tin cont si de faptul ca la cele de eroare (pentru TTL si DESTINATION UNREACHABLE), dupa header-ul de ICMP trebuie adugat si header-ul de IP vechi + urmatorii 64 de biti (8 bytes), fata de ICMP REPLY nu mai trebuie adaugat nimic dupa header-ul de ICMP
+
+=====LPM=====
+     Pentru Longest Prefix Match, am sortat crescator in host order tabela de rutare, dupa prefix, iar cand prefixele erau egale am sortat dupa masca.
+     Algoritmul in sine este implementat ca o cautare binara putin modificata:
+-in momentul in care gasesc un match (ip_dest & entry.mask == entry.prefix) retin acea intrare si mut "left-ul" la "mid + 1" pentru ca stiu ca masca cea mai mare e in dreapta;
+-daca nu gasesc un match, compar prefixul cu IP-ul destinatie si ma mut in partea din dreapta daca prefixul < destinatia, altfel ma mut la stanga;
+-la final returnez ruta cea mai buna sau NULL in cazul in care nu s-a gasit una.
